@@ -44,6 +44,8 @@ i386_init(void)
 	// Test the stack backtrace function (lab 1 only)
 	test_backtrace(5);
 
+	cprintf("\x1b[32;44;mColour test\x1b[0;m\n");
+
 	// Drop into the kernel monitor.
 	while (1)
 		monitor(NULL);
