@@ -36,6 +36,8 @@ i386_init(void)
 
 
 
+	cprintf("\x1b[32;44;mColour test\x1b[0;m\n");
+
 	// Drop into the kernel monitor.
 	while (1)
 		monitor(NULL);
