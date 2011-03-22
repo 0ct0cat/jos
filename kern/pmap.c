@@ -116,14 +116,14 @@ boot_alloc(uint32_t n, uint32_t align)
 	if (boot_freemem == 0)
 		boot_freemem = end;
 
-	// LAB 2: Your code here:
-	//	Step 1: round boot_freemem up to be aligned properly
-	//		(hint: look in types.h for some handy macros)
-	//	Step 2: save current value of boot_freemem as allocated chunk
-	//	Step 3: increase boot_freemem to record allocation
-	//	Step 4: return allocated chunk
+	// round boot_freemem up to be aligned properly
+	boot_freemem = ROUNDUP(boot_freemem, align);
 
-	return NULL;
+	// increase boot_freemem for allocation and return the pointer to the
+	// start of allocated memory
+	v = boot_freemem;
+	boot_freemem += n;
+	return v;
 }
 
 // Set up a two-level page table:
@@ -144,9 +144,6 @@ i386_vm_init(void)
 	pde_t* pgdir;
 	uint32_t cr0;
 	size_t n;
-
-	// Delete this line:
-	panic("i386_vm_init: This function is not finished\n");
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
@@ -174,8 +171,7 @@ i386_vm_init(void)
 	// each physical page, there is a corresponding struct Page in this
 	// array.  'npage' is the number of physical pages in memory.
 	// User-level programs will get read-only access to the array as well.
-	// Your code goes here:
-
+	pages = boot_alloc(npage * PGSIZE, PGSIZE);
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -197,7 +193,8 @@ i386_vm_init(void)
 	//    - the new image at UPAGES -- kernel R, user R
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
-	// Your code goes here:
+	pgdir[PDX(UPAGES)] = PADDR(pages)|PTE_U|PTE_P;
+	pgdir[PDX(pages)] = PADDR(pages)|PTE_W|PTE_P;
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -209,7 +206,7 @@ i386_vm_init(void)
 	//       the kernel overflows its stack, it will fault rather than
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	// Your code goes here:
+	pgdir[PDX(KSTACKTOP-PTSIZE)] = PADDR(bootstack)|PTE_W|PTE_P;
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE. 
@@ -218,7 +215,8 @@ i386_vm_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
-	// Your code goes here: 
+	for (n = KERNBASE; n <= 0xffffffff; ++n)
+		pgdir[PDX(n)] = (n - KERNBASE)|PTE_W|PTE_P;
 
 	// Check that the initial page directory has been set up correctly.
 	check_boot_pgdir();
@@ -433,8 +431,6 @@ check_va2pa(pde_t *pgdir, uintptr_t va)
 void
 page_init(void)
 {
-	// The example code here marks all physical pages as free.
-	// However this is not truly the case.  What memory is free?
 	//  1) Mark physical page 0 as in use.
 	//     This way we preserve the real-mode IDT and BIOS structures
 	//     in case we ever need them.  (Currently we don't, but...)
@@ -445,11 +441,15 @@ page_init(void)
 	//     Some of it is in use, some is free. Where is the kernel
 	//     in physical memory?  Which pages are already in use for
 	//     page tables and other data structures?
-	//
-	// Change the code to reflect this.
 	int i;
 	LIST_INIT(&page_free_list);
-	for (i = 0; i < npage; i++) {
+	for (i = 1; i < npage; i++) {
+		if ((i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE)
+			|| (i >= EXTPHYSMEM / PGSIZE
+				&& i < (unsigned int) boot_freemem / PGSIZE)) {
+			pages[i].pp_ref = 1; // mark as inuse
+			continue;
+		}
 		pages[i].pp_ref = 0;
 		LIST_INSERT_HEAD(&page_free_list, &pages[i], pp_link);
 	}
@@ -483,8 +483,14 @@ page_initpp(struct Page *pp)
 int
 page_alloc(struct Page **pp_store)
 {
-	// Fill this function in
-	return -E_NO_MEM;
+	// if no pages are free, return
+	if (LIST_EMPTY(&page_free_list)) 
+		return -E_NO_MEM;
+
+	*pp_store = LIST_FIRST(&page_free_list);
+	LIST_REMOVE(*pp_store, pp_link);
+	page_initpp(*pp_store);
+	return 0;
 }
 
 //
@@ -494,7 +500,7 @@ page_alloc(struct Page **pp_store)
 void
 page_free(struct Page *pp)
 {
-	// Fill this function in
+	LIST_INSERT_HEAD(&page_free_list, pp, pp_link);
 }
 
 //
