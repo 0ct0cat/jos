@@ -6,10 +6,12 @@
 #include <inc/memlayout.h>
 #include <inc/assert.h>
 #include <inc/x86.h>
+#include <inc/error.h>
 
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -24,7 +26,11 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
-	{ "backtrace", "Display the stack trace", mon_backtrace }
+	{ "backtrace", "Display the stack trace", mon_backtrace },
+	{ "alloc_page", "Allocate a page in the memory", mon_alloc_page },
+	{ "page_status", "Show status of a page with given physical address", mon_page_status },
+	{ "free_page", "Free a page with given physical address", mon_free_page },
+	
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -88,7 +94,51 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
+int
+mon_alloc_page(int argc, char **argv, struct Trapframe *tf)
+{
+	struct Page *pp;
+	if (page_alloc(&pp) == -E_NO_MEM) {
+		cprintf("mon_alloc_page: No memory available.\n");
+		return 1;
+	}
+	cprintf("\t%p\n", page2pa(pp));
 
+	return 0;
+}
+
+int
+mon_page_status(int argc, char **argv, struct Trapframe *tf)
+{
+	void *addr;
+	if (argc < 2) {
+		// need to provide physical address
+		cprintf("Please provide the physical address in hex format.\n");
+		return 1;
+	}
+	addr = (void *) strtol(argv[1], NULL, 16);
+	if (page_lookup(boot_pgdir, KADDR((uint32_t) addr), NULL) != NULL)
+		cprintf("\tassigned\n");
+	else
+		cprintf("\tfree\n");
+
+	return 0;
+}
+
+int
+mon_free_page(int argc, char **argv, struct Trapframe *tf)
+{
+	void *addr;
+	if (argc < 2) {
+		// need to provide physical address
+		cprintf("Please provide the physical address in hex format.\n");
+		return 1;
+	}
+	addr = (void *) strtol(argv[1], NULL, 16);
+	page_remove(boot_pgdir, KADDR((uint32_t) addr));
+
+	return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
