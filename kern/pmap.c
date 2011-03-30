@@ -171,7 +171,7 @@ i386_vm_init(void)
 	// each physical page, there is a corresponding struct Page in this
 	// array.  'npage' is the number of physical pages in memory.
 	// User-level programs will get read-only access to the array as well.
-	pages = boot_alloc(npage * PGSIZE, PGSIZE);
+	pages = boot_alloc(npage * sizeof(struct Page), PGSIZE);
 
 	//////////////////////////////////////////////////////////////////////
 	// Now that we've allocated the initial kernel data structures, we set
@@ -193,8 +193,7 @@ i386_vm_init(void)
 	//    - the new image at UPAGES -- kernel R, user R
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
-	pgdir[PDX(UPAGES)] = PADDR(pages)|PTE_U|PTE_P;
-	pgdir[PDX(pages)] = PADDR(pages)|PTE_W|PTE_P;
+    boot_map_segment(pgdir, UPAGES, ROUNDUP(npage * sizeof(struct Page), PGSIZE), PADDR(pages), PTE_W|PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -206,7 +205,7 @@ i386_vm_init(void)
 	//       the kernel overflows its stack, it will fault rather than
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
-	pgdir[PDX(KSTACKTOP-PTSIZE)] = PADDR(bootstack)|PTE_W|PTE_P;
+	boot_map_segment(pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W|PTE_P);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE. 
@@ -215,8 +214,7 @@ i386_vm_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
-	for (n = KERNBASE; n <= 0xffffffff; ++n)
-		pgdir[PDX(n)] = (n - KERNBASE)|PTE_W|PTE_P;
+	boot_map_segment(pgdir, KERNBASE, 0xffffffff-KERNBASE, 0, PTE_W|PTE_P);
 
 	// Check that the initial page directory has been set up correctly.
 	check_boot_pgdir();
@@ -448,10 +446,11 @@ page_init(void)
 			|| (i >= EXTPHYSMEM / PGSIZE
 				&& i < (unsigned int) boot_freemem / PGSIZE)) {
 			pages[i].pp_ref = 1; // mark as inuse
-			continue;
 		}
-		pages[i].pp_ref = 0;
-		LIST_INSERT_HEAD(&page_free_list, &pages[i], pp_link);
+		else {
+			pages[i].pp_ref = 0;
+			LIST_INSERT_HEAD(&page_free_list, &pages[i], pp_link);
+		}
 	}
 }
 
@@ -479,7 +478,6 @@ page_initpp(struct Page *pp)
 //   0 -- on success
 //   -E_NO_MEM -- otherwise 
 //
-// Hint: use LIST_FIRST, LIST_REMOVE, and page_initpp
 int
 page_alloc(struct Page **pp_store)
 {
@@ -490,6 +488,7 @@ page_alloc(struct Page **pp_store)
 	*pp_store = LIST_FIRST(&page_free_list);
 	LIST_REMOVE(*pp_store, pp_link);
 	page_initpp(*pp_store);
+	(*pp_store)->pp_ref = 0;
 	return 0;
 }
 
@@ -526,17 +525,27 @@ page_decref(struct Page* pp)
 //    - pgdir_walk clears the new page table.
 //    - Finally, pgdir_walk returns a pointer into the new page table.
 //
-// Hint: you can turn a Page * into the physical address of the
-// page it refers to with page2pa() from kern/pmap.h.
-//
-// Hint 2: the x86 MMU checks permission bits in both the page directory
-// and the page table, so it's safe to leave permissions in the page
-// more permissive than strictly necessary.
 pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
-	// Fill this function in
-	return NULL;
+	struct Page *pp;
+
+	if (!(pgdir[PDX(va)] & PTE_P)) { // not present
+		if (create == 0)
+			return NULL; // don't create, just fail
+		// create with page_alloc()
+		if (page_alloc(&pp) == 0) {
+			memset(KADDR(page2pa(pp)), 0, PGSIZE);
+			pp->pp_ref = 1;
+			pgdir[PDX(va)] = page2pa(pp)|PTE_P|PTE_W|PTE_U;
+			return (pte_t *) KADDR(page2pa(pp)) + PTX(va);
+		}
+		else
+			return NULL; // fails creating a new table
+	}
+	else {
+		return (pte_t *) KADDR(PTE_ADDR(pgdir[PDX(va)])) + PTX(va);
+	}
 }
 
 //
@@ -558,13 +567,19 @@ pgdir_walk(pde_t *pgdir, const void *va, int create)
 //   0 on success
 //   -E_NO_MEM, if page table couldn't be allocated
 //
-// Hint: The TA solution is implemented using pgdir_walk, page_remove,
-// and page2pa.
-//
 int
 page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm) 
 {
-	// Fill this function in
+	pte_t *pt_entry = pgdir_walk(pgdir, va, 1);
+	if (pt_entry == NULL)
+		return -E_NO_MEM;
+	if (PTE_ADDR(*pt_entry) == page2pa(pp))
+		*pt_entry |= perm;
+	else {
+		page_remove(pgdir, va);
+		*pt_entry = page2pa(pp)|perm|PTE_P;
+		++(pp->pp_ref);
+	}
 	return 0;
 }
 
@@ -577,11 +592,15 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 // above UTOP. As such, it should *not* change the pp_ref field on the
 // mapped pages.
 //
-// Hint: the TA solution uses pgdir_walk
 static void
 boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, physaddr_t pa, int perm)
 {
-	// Fill this function in
+	pte_t *pt_entry;
+	unsigned int i;
+	for (i = 0; i < size; i += PGSIZE) {
+		pt_entry = pgdir_walk(pgdir, (const void *) (la + i), 1);
+		*pt_entry = PTE_ADDR(pa + i)|perm|PTE_P;
+	}
 }
 
 //
@@ -593,13 +612,16 @@ boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, physaddr_t pa, int per
 //
 // Return NULL if there is no page mapped at va.
 //
-// Hint: the TA solution uses pgdir_walk and pa2page.
-//
 struct Page *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
-	// Fill this function in
-	return NULL;
+	pte_t *pt_entry;
+	pt_entry = pgdir_walk(pgdir, va, 0);
+	if (pt_entry == NULL || !(*pt_entry & PTE_P))
+		return NULL;
+	if (pte_store != NULL)
+		*pte_store = pt_entry;
+	return pa2page(PTE_ADDR(*pt_entry));
 }
 
 //
@@ -614,13 +636,17 @@ page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 //   - The TLB must be invalidated if you remove an entry from
 //     the pg dir/pg table.
 //
-// Hint: The TA solution is implemented using page_lookup,
-// 	tlb_invalidate, and page_decref.
-//
 void
 page_remove(pde_t *pgdir, void *va)
 {
-	// Fill this function in
+	struct Page *pp;
+	pte_t *pt_entry;
+	pp = page_lookup(pgdir, va, &pt_entry);
+	if (pp == NULL)
+		return;
+	page_decref(pp);
+	*pt_entry = 0;
+	tlb_invalidate(pgdir, va);
 }
 
 //
@@ -782,7 +808,7 @@ page_check(void)
 	boot_pgdir[0] = 0;
 	pp0->pp_ref = 0;
 
-	// give free list back
+	// give free list back */
 	page_free_list = fl;
 
 	// free the pages we took
@@ -792,4 +818,3 @@ page_check(void)
 	
 	cprintf("page_check() succeeded!\n");
 }
-
