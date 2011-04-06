@@ -424,13 +424,15 @@ cons_getc(void)
 	return 0;
 }
 
+int char_attr = 0; // character attributes, now for CGA-compatible only
+
 // output a character to the console
 static void
 cons_putc(int c)
 {
 	serial_putc(c);
 	lpt_putc(c);
-	cga_putc(c);
+	cga_putc(c | char_attr);
 }
 
 // initialize the console devices
