@@ -80,8 +80,6 @@ getint(va_list *ap, int lflag)
 // Main function to format and print a string.
 void printfmt(void (*putch)(int, void*), void *putdat, const char *fmt, ...);
 
-#define ESC_ASCII 0x1B
-
 void
 vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 {
@@ -90,16 +88,8 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 	unsigned long long num;
 	int base, lflag, width, precision, altflag;
 	char padc;
-	extern int char_attr; // from console.c
-	int attr_len;
-	int attr_cache[2]; // wait for semicolon to store into attr
-
-	// maps from ANSI escape sequence to CGA color
-	const int color_map[] = {0, 4, 2, 3, 1, 5, 6, 7};
-
 	while (1) {
-		while ((ch = *(unsigned char *) fmt++) != '%'
-			&& ch != ESC_ASCII) {
+		while ((ch = *(unsigned char *) fmt++) != '%') {
 			if (ch == '\0')
 				return;
 			putch(ch, putdat);
@@ -107,44 +97,6 @@ vprintfmt(void (*putch)(int, void*), void *putdat, const char *fmt, va_list ap)
 
 		if (ch == '%')
 			goto percentage;
-		else if (ch == ESC_ASCII)
-			goto escape;
-
-	// Process an escape-escaped sequence
-	escape:
-		attr_len = 0;
-		if ((ch = *(unsigned char *) fmt++) != '[')
-			continue; // starts with <ESC>[
-
-		while (((ch = *(unsigned char *) fmt++) >= '0'
-			&& ch <= '9')
-			|| ch == ';' || ch == 'm') {
-			switch (ch) {
-			case 'm':
-				break; // end
-			case ';':
-				if (attr_len == 0) { // set color
-					if (attr_cache[0] == 3) { // foreground
-						char_attr |= color_map[attr_cache[1]] << 8;
-					}
-					else if (attr_cache[0] == 4) { // background
-						char_attr |= color_map[attr_cache[1]] << 12;
-					}
-				}
-				else if (attr_len == 1) { // reset
-					if (attr_cache[0] == 0) { // reset
-						char_attr = 0;
-					}
-				}
-				break;
-			default: // digit
-				attr_cache[attr_len] = ch - '0';
-				attr_len = 1 - attr_len;
-			}
-			if (ch == 'm')
-				break;
-		}
-		continue; // pass through percentage
 
 	percentage:
 		// Process a %-escape sequence
