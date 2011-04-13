@@ -63,7 +63,13 @@ idt_init(void)
 
 	// exceptions
 	for (i = T_DIVIDE; i < T_SIMDERR; ++i) {
-		SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 0);
+		// T_BRKPT can be invoked from user space
+		if (i == T_BRKPT) {
+			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 3);
+		}
+		else {
+			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 0);
+		}
 	}
 
 	// system call
@@ -129,6 +135,9 @@ trap_dispatch(struct Trapframe *tf)
 	}
 	else if (tf->tf_trapno == T_PGFLT) {
 		page_fault_handler(tf);
+	}
+	else if (tf->tf_trapno == T_BRKPT) {
+		monitor(tf);
 	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
