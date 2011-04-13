@@ -462,7 +462,7 @@ page_init(void)
 	for (i = 1; i < npage; i++) {
 		if ((i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE)
 			|| (i >= EXTPHYSMEM / PGSIZE
-				&& i < (unsigned int) boot_freemem / PGSIZE)) {
+				&& i < (unsigned int) PADDR(boot_freemem) / PGSIZE)) {
 			pages[i].pp_ref = 1; // mark as inuse
 		}
 		else {
