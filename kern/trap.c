@@ -126,27 +126,25 @@ static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
-	struct PushRegs *regs;
-	if (tf->tf_trapno == T_SYSCALL) {
-		regs = &(tf->tf_regs);
-		syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx, regs->reg_ebx,
-			regs->reg_edi, regs->reg_esi);
-		return;
-	}
-	else if (tf->tf_trapno == T_PGFLT) {
+	switch (tf->tf_trapno) {
+	case T_SYSCALL:
+		system_call_handler(tf);
+		break;
+	case T_PGFLT:
 		page_fault_handler(tf);
-	}
-	else if (tf->tf_trapno == T_BRKPT) {
+		break;
+	case T_BRKPT:
 		monitor(tf);
-	}
-
-	// Unexpected trap: The user process or the kernel has a bug.
-	print_trapframe(tf);
-	if (tf->tf_cs == GD_KT)
-		panic("unhandled trap in kernel");
-	else {
-		env_destroy(curenv);
-		return;
+		break;
+	default:
+		// Unexpected trap: The user process or the kernel has a bug.
+		print_trapframe(tf);
+		if (tf->tf_cs == GD_KT)
+			panic("unhandled trap in kernel");
+		else {
+			env_destroy(curenv);
+			return;
+		}
 	}
 }
 
@@ -206,3 +204,15 @@ page_fault_handler(struct Trapframe *tf)
 	env_destroy(curenv);
 }
 
+void
+system_call_handler(struct Trapframe *tf)
+{
+	struct PushRegs *regs = &(tf->tf_regs);
+	uint32_t ret;
+	// %eax - system call number
+	// %edx to %esi - arguments for system call
+	// return value stored in %eax
+	ret = syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx,
+		regs->reg_ebx, regs->reg_edi, regs->reg_esi);
+	regs->reg_eax = ret;
+}
