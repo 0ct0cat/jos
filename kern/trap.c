@@ -52,13 +52,23 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+void HANDLER_SYSCALL();
+extern uint32_t trap_handlers[];
 
 void
 idt_init(void)
 {
 	extern struct Segdesc gdt[];
-	
-	// LAB 3: Your code here.
+	int i;
+
+	// exceptions
+	for (i = T_DIVIDE; i < T_SIMDERR; ++i) {
+		SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 0);
+	}
+
+	// system call
+	SETGATE(idt[T_SYSCALL], 1, GD_KT, HANDLER_SYSCALL, 3);
+
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
@@ -110,8 +120,13 @@ static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
-	// LAB 3: Your code here.
-	
+	struct PushRegs *regs;
+	if (tf->tf_trapno == T_SYSCALL) {
+		regs = &(tf->tf_regs);
+		syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx, regs->reg_ebx,
+			regs->reg_edi, regs->reg_esi);
+		return;
+	}
 
 	// Unexpected trap: The user process or the kernel has a bug.
 	print_trapframe(tf);
