@@ -56,8 +56,6 @@ i386_init(void)
 
 	// Schedule and run the first user environment!
 	sched_yield();
-
-
 }
 
 

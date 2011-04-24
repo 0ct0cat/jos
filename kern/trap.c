@@ -57,13 +57,29 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+void HANDLER_SYSCALL();
+extern uint32_t trap_handlers[];
 
 void
 idt_init(void)
 {
 	extern struct Segdesc gdt[];
-	
-	// LAB 3: Your code here.
+	int i;
+
+	// exceptions
+	for (i = T_DIVIDE; i < T_SIMDERR; ++i) {
+		// T_BRKPT can be invoked from user space
+		if (i == T_BRKPT) {
+			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 3);
+		}
+		else {
+			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 0);
+		}
+	}
+
+	// system call
+	SETGATE(idt[T_SYSCALL], 1, GD_KT, HANDLER_SYSCALL, 3);
+
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
@@ -115,28 +131,36 @@ static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
-	// LAB 3: Your code here.
 	
 	// Handle clock interrupts.
 	// LAB 4: Your code here.
-
-	// Handle spurious interrupts
-	// The hardware sometimes raises these because of noise on the
-	// IRQ line or other reasons. We don't care.
-	if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
+	
+	switch (tf->tf_trapno) {
+	case IRQ_OFFSET + IRQ_SPURIOUS:
+		// Handle spurious interrupts
+		// The hardware sometimes raises these because of noise on the
+		// IRQ line or other reasons. We don't care.
 		cprintf("Spurious interrupt on irq 7\n");
 		print_trapframe(tf);
 		return;
-	}
-
-
-	// Unexpected trap: The user process or the kernel has a bug.
-	print_trapframe(tf);
-	if (tf->tf_cs == GD_KT)
-		panic("unhandled trap in kernel");
-	else {
-		env_destroy(curenv);
+	case T_SYSCALL:
+		system_call_handler(tf);
 		return;
+	case T_PGFLT:
+		page_fault_handler(tf);
+		return;
+	case T_BRKPT:
+		monitor(tf);
+		return;
+	default:
+		// Unexpected trap: The user process or the kernel has a bug.
+		print_trapframe(tf);
+		if (tf->tf_cs == GD_KT)
+			panic("unhandled trap in kernel");
+		else {
+			env_destroy(curenv);
+			return;
+		}
 	}
 }
 
@@ -185,8 +209,10 @@ page_fault_handler(struct Trapframe *tf)
 	fault_va = rcr2();
 
 	// Handle kernel-mode page faults.
-	
-	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0) {
+		panic("kernel page fault at virtual address %p", fault_va);
+		return;
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -228,3 +254,15 @@ page_fault_handler(struct Trapframe *tf)
 	env_destroy(curenv);
 }
 
+void
+system_call_handler(struct Trapframe *tf)
+{
+	struct PushRegs *regs = &(tf->tf_regs);
+	uint32_t ret;
+	// %eax - system call number
+	// %edx to %esi - arguments for system call
+	// return value stored in %eax
+	ret = syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx,
+		regs->reg_ebx, regs->reg_edi, regs->reg_esi);
+	regs->reg_eax = ret;
+}
