@@ -227,7 +227,7 @@ i386_vm_init(void)
 	// We might not have 2^32 - KERNBASE bytes of physical memory, but
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
-	boot_map_segment(pgdir, KERNBASE, 0xffffffff-KERNBASE, 0, PTE_W|PTE_P);
+	boot_map_segment(pgdir, KERNBASE, ~KERNBASE + 1, 0, PTE_W|PTE_P);
 
 	// Check that the initial page directory has been set up correctly.
 	check_boot_pgdir();
