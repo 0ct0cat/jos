@@ -127,7 +127,7 @@ env_setup_vm(struct Env *e)
 
 	memset(e->env_pgdir, 0, PGSIZE);
 
-	for (i = PDX(UTOP); i < PGSIZE; ++i)
+	for (i = PDX(UTOP); i < PGSIZE / sizeof(pde_t); ++i)
 		e->env_pgdir[i] = boot_pgdir[i];
 
 	// VPT and UVPT map the env's own page table, with
