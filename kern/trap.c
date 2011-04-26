@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/string.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -204,6 +205,8 @@ void
 page_fault_handler(struct Trapframe *tf)
 {
 	uint32_t fault_va;
+	struct UTrapframe utf;
+	void *dst;
 
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
@@ -245,7 +248,34 @@ page_fault_handler(struct Trapframe *tf)
 	//   To change what the user environment runs, modify 'curenv->env_tf'
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
-	// LAB 4: Your code here.
+	if (curenv->env_pgfault_upcall != NULL
+		&& user_mem_check(curenv, (void *) UXSTACKTOP-PGSIZE, PGSIZE,
+			PTE_P|PTE_U|PTE_W) == 0
+		&& (tf->tf_esp < UXSTACKTOP-PGSIZE
+			|| tf->tf_esp >= UXSTACKTOP
+			|| tf->tf_esp - sizeof(struct UTrapframe) - 4 >= UXSTACKTOP-PGSIZE)) {
+		// decide the destination of UTrapframe
+		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP)
+			dst = (void *) (tf->tf_esp - 4 - sizeof(utf));
+		else
+			dst = (void *) (UXSTACKTOP - sizeof(utf));
+
+		// set up UTrapframe
+		utf = (struct UTrapframe) {
+			fault_va,
+			tf->tf_err,
+			tf->tf_regs,
+			tf->tf_eip,
+			tf->tf_eflags,
+			curenv->env_tf.tf_esp
+		};
+		memmove(dst, &utf, sizeof(utf));
+
+		curenv->env_tf.tf_esp = (uint32_t) dst;
+		curenv->env_tf.tf_eip = (uint32_t) curenv->env_pgfault_upcall;
+		env_run(curenv);
+		return;
+	}
 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
