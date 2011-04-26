@@ -91,7 +91,7 @@ sys_exofork(void)
 	env->env_tf = curenv->env_tf;
 	env->env_tf.tf_regs.reg_eax = 0; // return 0 in forked environment
 
-	return (envid_t) r;
+	return env->env_id;
 }
 
 // Set envid's env_status to status, which must be ENV_RUNNABLE
@@ -113,9 +113,13 @@ sys_env_set_status(envid_t envid, int status)
 	struct Env *env;
 	int r;
 
+	// check status
+	if (status != ENV_RUNNABLE && status != ENV_NOT_RUNNABLE)
+		return -E_INVAL;
+
 	if ((r = envid2env(envid, &env, 1)) < 0)
 		return r;
-	env->env_id = status;
+	env->env_status = status;
 	return 0;
 }
 
@@ -359,6 +363,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return 0;
 	case SYS_exofork:
 		return sys_exofork();
+	case SYS_env_set_status:
+		return sys_env_set_status((envid_t) a1, (int) a2);
 	case SYS_env_set_pgfault_upcall:
 		return sys_env_set_pgfault_upcall((envid_t) a1, (void *) a2);
 	case SYS_page_alloc:
