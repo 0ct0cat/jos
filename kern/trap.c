@@ -207,6 +207,7 @@ page_fault_handler(struct Trapframe *tf)
 	uint32_t fault_va;
 	struct UTrapframe utf;
 	void *dst;
+	size_t size;
 
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
@@ -249,16 +250,23 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	if (curenv->env_pgfault_upcall != NULL
-		&& user_mem_check(curenv, (void *) UXSTACKTOP-PGSIZE, PGSIZE,
-			PTE_P|PTE_U|PTE_W) == 0
 		&& (tf->tf_esp < UXSTACKTOP-PGSIZE
 			|| tf->tf_esp >= UXSTACKTOP
 			|| tf->tf_esp - sizeof(struct UTrapframe) - 4 >= UXSTACKTOP-PGSIZE)) {
 		// decide the destination of UTrapframe
-		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP)
-			dst = (void *) (tf->tf_esp - 4 - sizeof(utf));
-		else
-			dst = (void *) (UXSTACKTOP - sizeof(utf));
+		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP) {
+			size = 4 + sizeof(utf);
+			dst = (void *) (tf->tf_esp - size);
+		}
+		else {
+			size = sizeof(utf);
+			dst = (void *) (UXSTACKTOP - size);
+		}
+
+		// make sure exception stack is allocated and pgfault_upcall is valid
+		user_mem_assert(curenv, (void *) dst, size, PTE_P|PTE_U|PTE_W);
+		user_mem_assert(curenv, curenv->env_pgfault_upcall, sizeof(void *),
+			PTE_P|PTE_U);
 
 		// set up UTrapframe
 		utf = (struct UTrapframe) {
