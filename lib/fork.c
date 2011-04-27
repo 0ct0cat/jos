@@ -80,15 +80,12 @@ duppage(envid_t envid, unsigned pn)
 	// if map as copy-on-write, remap with different perm
 	if (perm & PTE_COW)
 		if ((r = sys_page_map(0, (void *) (pn * PGSIZE),
-			0, (void *) (pn * PGSIZE), perm)) < 0) {
-			cprintf("cannot remap at %08x\n", pn * PGSIZE);
-			return r;
-		}
+			0, (void *) (pn * PGSIZE), perm)) < 0)
+			panic("cannot remap at %08x\n", pn * PGSIZE);
 	// duplicate mapping at envid
 	if ((r = sys_page_map(0, (void *) (pn * PGSIZE),
 		envid, (void *) (pn * PGSIZE), perm)) < 0) {
-		cprintf("cannot duplicate mapping at %08x\n", pn * PGSIZE);
-		return r;
+		panic("cannot duplicate mapping at %08x\n", pn * PGSIZE);
 	}
 	return 0;
 }
@@ -129,23 +126,18 @@ fork(void)
 				for (pt_idx = 0; pt_idx < NPTENTRIES; ++pt_idx) {
 					if ((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT) != UXSTACKTOP - PGSIZE) {
 						if (vpt[VPN((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT))] & PTE_P) {
-							if ((r = duppage(child_id, VPN((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT)))) < 0) {
-								cprintf("error duplicating at %08x: %e\n",
-									(pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT),
-									r);
-								panic("boo");
-							}
+							duppage(child_id, VPN((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT)));
 						}
 					}
 				}
 			}
 		}
-		if ((r = sys_page_alloc(child_id, (void *) (UXSTACKTOP - PGSIZE), PTE_W)) < 0)
-			return r;
+		if ((r = sys_page_alloc(child_id, (void *) (UXSTACKTOP - PGSIZE), PTE_U|PTE_W)) < 0)
+			panic("cannot allocate user exception stack");
 		if ((r = sys_env_set_pgfault_upcall(child_id, env->env_pgfault_upcall)) < 0)
-			return r;
+			panic("cannot set page fault upcall for child");
 		if ((r = sys_env_set_status(child_id, ENV_RUNNABLE)) < 0)
-			return r;
+			panic("cannot set child as runnable");
 	}
 	else {
 		// child
