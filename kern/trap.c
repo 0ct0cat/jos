@@ -60,6 +60,7 @@ static const char *trapname(int trapno)
 
 void HANDLER_SYSCALL();
 extern uint32_t trap_handlers[];
+extern uint32_t irq_handlers[];
 
 void
 idt_init(void)
@@ -81,6 +82,10 @@ idt_init(void)
 	// system call
 	SETGATE(idt[T_SYSCALL], 1, GD_KT, HANDLER_SYSCALL, 3);
 
+	// hardware interrupt
+	for (i = IRQ_0; i <= IRQ_15; ++i) {
+		SETGATE(idt[IRQ_OFFSET + i], 0, GD_KT, irq_handlers[i], 3);
+	}
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
@@ -132,10 +137,10 @@ static void
 trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
-	
+
 	// Handle clock interrupts.
 	// LAB 4: Your code here.
-	
+
 	switch (tf->tf_trapno) {
 	case IRQ_OFFSET + IRQ_SPURIOUS:
 		// Handle spurious interrupts
