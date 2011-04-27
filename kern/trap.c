@@ -138,9 +138,6 @@ trap_dispatch(struct Trapframe *tf)
 {
 	// Handle processor exceptions.
 
-	// Handle clock interrupts.
-	// LAB 4: Your code here.
-
 	switch (tf->tf_trapno) {
 	case IRQ_OFFSET + IRQ_SPURIOUS:
 		// Handle spurious interrupts
@@ -149,6 +146,9 @@ trap_dispatch(struct Trapframe *tf)
 		cprintf("Spurious interrupt on irq 7\n");
 		print_trapframe(tf);
 		return;
+	case IRQ_OFFSET + IRQ_TIMER:
+		// Handle clock interrupts
+		sched_yield();
 	case T_SYSCALL:
 		system_call_handler(tf);
 		return;
