@@ -21,8 +21,9 @@ sched_yield(void)
 	static unsigned int last_run = 0;
 	unsigned int i, idx;
 
+	// start from next one
 	for (i = 0; i < NENV; ++i) {
-		idx = (i + last_run + 1) % NENV; // start from the next one
+		idx = ENVX(last_run + i + 1);
 		if (idx > 0 && envs[idx].env_status == ENV_RUNNABLE) {
 			last_run = idx;
 			env_run(&envs[idx]);
