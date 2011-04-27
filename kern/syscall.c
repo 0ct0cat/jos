@@ -237,6 +237,8 @@ sys_page_map(envid_t srcenvid, void *srcva,
 		return r;
 
 	pp = page_lookup(src_env->env_pgdir, srcva, NULL);
+	if (pp == NULL)
+		return -E_INVAL;
 
 	// check perm (PTE_W)
 	if ((perm & PTE_W)
