@@ -149,7 +149,7 @@ fork(void)
 	}
 	else {
 		// child
-		env = &envs[sys_getenvid()];
+		env = &envs[ENVX(sys_getenvid())];
 		return 0;
 	}
 	return child_id;
