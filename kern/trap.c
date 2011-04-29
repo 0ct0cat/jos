@@ -149,6 +149,7 @@ trap_dispatch(struct Trapframe *tf)
 	case IRQ_OFFSET + IRQ_TIMER:
 		// Handle clock interrupts
 		sched_yield();
+		return;
 	case T_SYSCALL:
 		system_call_handler(tf);
 		return;
