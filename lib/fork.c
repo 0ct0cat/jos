@@ -110,7 +110,7 @@ envid_t
 fork(void)
 {
 	int r;
-	unsigned int pd_idx, pt_idx;
+	unsigned int pd_idx, pt_idx, va;
 	envid_t child_id;
 	set_pgfault_handler(pgfault);
 
@@ -124,9 +124,10 @@ fork(void)
 		for (pd_idx = 0; pd_idx < PDX(UTOP); ++pd_idx) {
 			if (vpd[pd_idx] & PTE_P) {
 				for (pt_idx = 0; pt_idx < NPTENTRIES; ++pt_idx) {
-					if ((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT) != UXSTACKTOP - PGSIZE) {
-						if (vpt[VPN((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT))] & PTE_P) {
-							duppage(child_id, VPN((pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT)));
+					va = (pd_idx << PDXSHIFT) + (pt_idx << PTXSHIFT);
+					if (va != UXSTACKTOP - PGSIZE) {
+						if (vpt[VPN(va)] & PTE_P) {
+							duppage(child_id, VPN(va));
 						}
 					}
 				}
