@@ -318,8 +318,36 @@ sys_page_unmap(envid_t envid, void *va)
 static int
 sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
-	// LAB 4: Your code here.
-	panic("sys_ipc_try_send not implemented");
+	struct Env *env;
+	struct Page *pp;
+	int r;
+
+	if ((r = envid2env(envid, &env, 0)) < 0)
+		return r;
+
+	if (!env->env_ipc_recving)
+		return -E_IPC_NOT_RECV;
+	env->env_ipc_recving = 0;
+
+	if ((uint32_t) srcva < UTOP) {
+		if (srcva != ROUNDUP(srcva, PGSIZE))
+			return -E_INVAL;
+		if (perm & ~PTE_W & ~PTE_U & ~PTE_W & ~PTE_AVAIL)
+			return -E_INVAL;
+		if ((pp = page_lookup(curenv->env_pgdir, srcva, NULL)) == NULL)
+			return -E_INVAL;
+		if ((perm & PTE_W)
+			&& !(*(pgdir_walk(curenv->env_pgdir, srcva, 0)) & PTE_W))
+			return -E_INVAL;
+		if ((r = page_insert(curenv->env_pgdir, pp, env->env_ipc_dstva, perm)) < 0)
+			return r;
+	}
+	env->env_ipc_value = value;
+	env->env_ipc_from = curenv->env_id;
+	env->env_ipc_perm = perm;
+	env->env_status = ENV_RUNNABLE;
+
+	return 0;
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -336,8 +364,22 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 static int
 sys_ipc_recv(void *dstva)
 {
-	// LAB 4: Your code here.
-	panic("sys_ipc_recv not implemented");
+	if ((uint32_t) dstva < UTOP) {
+		// check sanity of dstva
+		if (dstva == ROUNDUP(dstva, PGSIZE))
+			curenv->env_ipc_dstva = dstva;
+		else
+			return -E_INVAL;
+	}
+	else {
+		curenv->env_ipc_dstva = NULL;
+	}
+	curenv->env_ipc_recving = 1;
+	curenv->env_status = ENV_NOT_RUNNABLE;
+	curenv->env_tf.tf_regs.reg_eax = 0;
+
+	sys_yield();
+
 	return 0;
 }
 
@@ -376,6 +418,11 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			(void *) a4, (int) a5);
 	case SYS_page_unmap:
 		return sys_page_unmap((envid_t) a1, (void *) a2);
+	case SYS_ipc_try_send:
+		return sys_ipc_try_send((envid_t) a1, (uint32_t) a2, (void *) a3,
+			(unsigned int) a4);
+	case SYS_ipc_recv:
+		return sys_ipc_recv((void *) a1);
 	default:
 		return -E_INVAL;
 	}
