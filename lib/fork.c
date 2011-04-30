@@ -133,7 +133,7 @@ fork(void)
 				}
 			}
 		}
-		if ((r = sys_page_alloc(child_id, (void *) (UXSTACKTOP - PGSIZE), PTE_U|PTE_W)) < 0)
+		if ((r = sys_page_alloc(child_id, (void *) (UXSTACKTOP - PGSIZE), PTE_U|PTE_W|PTE_P)) < 0)
 			panic("cannot allocate user exception stack");
 		if ((r = sys_env_set_pgfault_upcall(child_id, env->env_pgfault_upcall)) < 0)
 			panic("cannot set page fault upcall for child");
