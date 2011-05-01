@@ -219,6 +219,7 @@ i386_vm_init(void)
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
 	boot_map_segment(pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W|PTE_P);
+	boot_map_segment(pgdir, KSTACKTOP-PTSIZE, PTSIZE-KSTKSIZE, 0, 0);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE. 
@@ -459,8 +460,9 @@ page_init(void)
 	//     page tables and other data structures?
 	int i;
 	LIST_INIT(&page_free_list);
-	for (i = 1; i < npage; i++) {
-		if ((i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE)
+	for (i = 0; i < npage; i++) {
+		if (i == 0
+			|| (i >= IOPHYSMEM / PGSIZE && i < EXTPHYSMEM / PGSIZE)
 			|| (i >= EXTPHYSMEM / PGSIZE
 				&& i < (unsigned int) PADDR(boot_freemem) / PGSIZE)) {
 			pages[i].pp_ref = 1; // mark as inuse
@@ -617,7 +619,7 @@ boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, physaddr_t pa, int per
 	unsigned int i;
 	for (i = 0; i < size; i += PGSIZE) {
 		pt_entry = pgdir_walk(pgdir, (const void *) (la + i), 1);
-		*pt_entry = PTE_ADDR(pa + i)|perm|PTE_P;
+		*pt_entry = PTE_ADDR(pa + i)|perm;
 	}
 }
 
