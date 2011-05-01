@@ -593,13 +593,13 @@ page_insert(pde_t *pgdir, struct Page *pp, void *va, int perm)
 	pte_t *pt_entry = pgdir_walk(pgdir, va, 1);
 	if (pt_entry == NULL)
 		return -E_NO_MEM;
-	if (PTE_ADDR(*pt_entry) == page2pa(pp))
-		*pt_entry |= perm;
-	else {
+
+	++(pp->pp_ref);
+	if (*pt_entry & PTE_P) {
 		page_remove(pgdir, va);
-		*pt_entry = page2pa(pp)|perm|PTE_P;
-		++(pp->pp_ref);
 	}
+
+	*pt_entry = page2pa(pp)|perm|PTE_P;
 	return 0;
 }
 
