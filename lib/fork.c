@@ -77,16 +77,17 @@ duppage(envid_t envid, unsigned pn)
 	else
 		perm = PTE_U|PTE_P;
 
-	// if map as copy-on-write, remap with different perm
-	if (perm & PTE_COW)
-		if ((r = sys_page_map(0, (void *) (pn * PGSIZE),
-			0, (void *) (pn * PGSIZE), perm)) < 0)
-			panic("cannot remap at %08x\n", pn * PGSIZE);
 	// duplicate mapping at envid
 	if ((r = sys_page_map(0, (void *) (pn * PGSIZE),
 		envid, (void *) (pn * PGSIZE), perm)) < 0) {
 		panic("cannot duplicate mapping at %08x\n", pn * PGSIZE);
 	}
+
+	// if map as copy-on-write, remap with different perm
+	if (perm & PTE_COW)
+		if ((r = sys_page_map(0, (void *) (pn * PGSIZE),
+			0, (void *) (pn * PGSIZE), perm)) < 0)
+			panic("cannot remap at %08x\n", pn * PGSIZE);
 	return 0;
 }
 
