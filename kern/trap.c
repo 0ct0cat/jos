@@ -72,15 +72,15 @@ idt_init(void)
 	for (i = T_DIVIDE; i < T_SIMDERR; ++i) {
 		// T_BRKPT can be invoked from user space
 		if (i == T_BRKPT) {
-			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 3);
+			SETGATE(idt[i], 0, GD_KT, trap_handlers[i], 3);
 		}
 		else {
-			SETGATE(idt[i], 1, GD_KT, trap_handlers[i], 0);
+			SETGATE(idt[i], 0, GD_KT, trap_handlers[i], 0);
 		}
 	}
 
 	// system call
-	SETGATE(idt[T_SYSCALL], 1, GD_KT, HANDLER_SYSCALL, 3);
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, HANDLER_SYSCALL, 3);
 
 	// hardware interrupt
 	for (i = IRQ_0; i <= IRQ_15; ++i) {

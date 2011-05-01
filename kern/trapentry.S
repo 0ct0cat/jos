@@ -108,5 +108,4 @@ _alltraps:
 	popl %eax
 
 	pushl %esp
-	cli
 	call trap
