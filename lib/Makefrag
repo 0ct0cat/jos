@@ -12,7 +12,7 @@ LIB_SRCFILES :=		lib/console.c \
 
 LIB_SRCFILES :=		$(LIB_SRCFILES) \
 			lib/pgfault.c \
-			lib/pfentry.S \
+			lib/pfentry.c \
 			lib/fork.c \
 			lib/ipc.c
 
