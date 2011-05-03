@@ -25,7 +25,8 @@ pgfault(struct UTrapframe *utf)
 	//   (see <inc/memlayout.h>).
 
 	if (!((err & FEC_WR) && (vpt[VPN(addr)] & PTE_COW))) {
-		cprintf("virtual address: %08x, %d, %d\n", addr, err & FEC_WR, vpt[VPN(addr)] & PTE_COW);
+		cprintf("[%08x] virtual address: %08x, %d, %d\n", env->env_id,
+			addr, err & FEC_WR, vpt[VPN(addr)] & PTE_COW);
 		panic("unrecoverable user page fault");
 	}
 
