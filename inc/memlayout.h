@@ -51,7 +51,11 @@
  *                     |       Empty Memory (*)       | --/--  PGSIZE
  *    USTACKTOP  --->  +------------------------------+ 0xeebfe000
  *                     |      Normal User Stack       | RW/RW  PGSIZE
- *                     +------------------------------+ 0xeebfd000
+ *   USTACKBASE   ---> +------------------------------+ 0xeebfd000
+ *                     |       Empty Memory (*)       | --/--  PGSIZE
+ *                     +------------------------------+ 0xeebfc000
+ *                     |       System Call Page       | R-/R-  PGSIZE
+ *    SYSCPAGE   --->  +------------------------------+ 0xeebfb000
  *                     |                              |
  *                     |                              |
  *                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -119,6 +123,9 @@
 // Next page left invalid to guard against exception stack overflow; then:
 // Top of normal user stack
 #define USTACKTOP	(UTOP - 2*PGSIZE)
+#define USTACKBASE  (USTACKTOP - PGSIZE)
+// Base of System Call Page
+#define SYSCPAGE    (USTACKBASE - 2*PGSIZE)
 
 // Where user programs generally begin
 #define UTEXT		(2*PTSIZE)

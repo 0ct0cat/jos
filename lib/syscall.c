@@ -111,3 +111,7 @@ sys_ipc_recv(void *dstva)
 	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, 0, 0, 0, 0);
 }
 
+int
+sys_sigaction(sig_t signum, const struct Sigaction *act, struct Sigaction *oldact) {
+	return syscall(SYS_sigaction, 0, (uint32_t) signum, (uint32_t) act, (uint32_t) oldact, 0, 0);
+}

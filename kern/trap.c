@@ -12,6 +12,7 @@
 #include <kern/sched.h>
 #include <kern/kclock.h>
 #include <kern/picirq.h>
+#include <kern/signal.h>
 
 static struct Taskstate ts;
 
@@ -255,41 +256,17 @@ page_fault_handler(struct Trapframe *tf)
 	//   To change what the user environment runs, modify 'curenv->env_tf'
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
-	if (curenv->env_pgfault_upcall != NULL
-		&& (tf->tf_esp < UXSTACKTOP-PGSIZE
-			|| tf->tf_esp >= UXSTACKTOP
-			|| tf->tf_esp - sizeof(struct UTrapframe) - 4 >= UXSTACKTOP-PGSIZE)) {
-		// decide the destination of UTrapframe
-		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP) {
-			size = 4 + sizeof(utf);
-			dst = (void *) (tf->tf_esp - size);
-		}
-		else {
-			size = sizeof(utf);
-			dst = (void *) (UXSTACKTOP - size);
-		}
+	// set up UTrapframe
+	utf = (struct UTrapframe) {
+		fault_va,
+		tf->tf_err,
+		tf->tf_regs,
+		tf->tf_eip,
+		tf->tf_eflags,
+		tf->tf_esp
+	};
 
-		// make sure exception stack is allocated and pgfault_upcall is valid
-		user_mem_assert(curenv, (void *) dst, size, PTE_P|PTE_U|PTE_W);
-		user_mem_assert(curenv, curenv->env_pgfault_upcall, sizeof(void *),
-			PTE_P|PTE_U);
-
-		// set up UTrapframe
-		utf = (struct UTrapframe) {
-			fault_va,
-			tf->tf_err,
-			tf->tf_regs,
-			tf->tf_eip,
-			tf->tf_eflags,
-			curenv->env_tf.tf_esp
-		};
-		memmove(dst, &utf, sizeof(utf));
-
-		curenv->env_tf.tf_esp = (uint32_t) dst;
-		curenv->env_tf.tf_eip = (uint32_t) curenv->env_pgfault_upcall;
-		env_run(curenv);
-		return;
-	}
+	sig_deliver(SIGSEGV, &utf);
 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",

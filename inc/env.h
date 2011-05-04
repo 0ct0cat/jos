@@ -7,6 +7,7 @@
 #include <inc/queue.h>
 #include <inc/trap.h>
 #include <inc/memlayout.h>
+#include <inc/signal.h>
 
 typedef int32_t envid_t;
 
@@ -49,6 +50,9 @@ struct Env {
 
 	// Exception handling
 	void *env_pgfault_upcall;	// page fault upcall entry point
+
+	// signal handler
+	struct Sigaction env_sigact[SIG_SIZE]; // signal handler
 
 	// Lab 4 IPC
 	bool env_ipc_recving;		// env is blocked receiving

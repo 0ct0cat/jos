@@ -11,6 +11,7 @@
 #include <kern/syscall.h>
 #include <kern/console.h>
 #include <kern/sched.h>
+#include <kern/signal.h>
 
 // Print a string to the system console.
 // The string is exactly 'len' characters long.
@@ -383,7 +384,37 @@ sys_ipc_recv(void *dstva)
 	return 0;
 }
 
+// Examine and change a signal handler
+// sys_sigaction is used to change the handler taken by a process on receipt
+// of a specific handler, or to retrieve the current handler.
+//
+// Except for SIGCALL and SIGSTOP signals, handlers for all signals could be
+// set.
+//
+// This system call looks like the sigaction(2) system call on many
+// UNIX-like systems.
+//
+// Return 0 on success,
+// Return -E_INVAL if signum provided is invalid.
+//
+static int
+sys_sigaction(sig_t signum, const struct Sigaction *act, struct Sigaction *oldact)
+{
+	// check against signum, preventing overbound
+	if (signum < SIG_MIN || signum > SIG_MAX)
+		return -E_INVAL;
 
+	if (act != NULL) {
+		// SIGCALL and SIGSTOP handlers can not be overwritten
+		if (signum == SIGKILL || signum == SIGSTOP)
+			return -E_INVAL;
+		curenv->env_sigact[signum] = *act;
+	}
+	if (oldact != NULL)
+		*oldact = curenv->env_sigact[signum];
+
+	return 0;
+}
 
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
@@ -423,6 +454,9 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			(unsigned int) a4);
 	case SYS_ipc_recv:
 		return sys_ipc_recv((void *) a1);
+	case SYS_sigaction:
+		return sys_sigaction((sig_t) a1, (const struct Sigaction *) a2,
+			(struct Sigaction *) a3);
 	default:
 		return -E_INVAL;
 	}

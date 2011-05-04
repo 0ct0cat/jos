@@ -19,6 +19,10 @@ static struct Env_list env_free_list;	// Free list
 
 #define ENVGENSHIFT	12		// >= LOGNENV
 
+// __sys_return and __sys_return_end defined in syscpage.S
+extern void *__sys_return;
+extern void *__sys_return_end;
+
 //
 // Converts an envid to an env pointer.
 // If checkperm is set, the specified environment must be either the
@@ -150,7 +154,7 @@ int
 env_alloc(struct Env **newenv_store, envid_t parent_id)
 {
 	int32_t generation;
-	int r;
+	int i, r;
 	struct Env *e;
 
 	if (!(e = LIST_FIRST(&env_free_list)))
@@ -197,6 +201,11 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 
 	// Also clear the IPC receiving flag.
 	e->env_ipc_recving = 0;
+
+	// Set signal handler to default values
+	for (i = 0; i < SIG_SIZE; ++i)
+		e->env_sigact[i] = (struct Sigaction) { (sighandler_t *) SIG_DFL,
+			(sighandler_info_t *) SIG_DFL };
 
 	// commit the allocation
 	LIST_REMOVE(e, env_link);
@@ -310,6 +319,17 @@ load_icode(struct Env *e, uint8_t *binary, size_t size)
 	// Now map one page for the program's initial stack
 	// at virtual address USTACKTOP - PGSIZE.
 	segment_alloc(e, (void *)(USTACKTOP - PGSIZE), PGSIZE);
+
+	// Also get a page for user exception stack
+	segment_alloc(e, (void *)(UXSTACKTOP - PGSIZE), PGSIZE);
+
+	// Also map a page for system call page, which is not user-writeable
+	if ((r = page_alloc(&pp)) < 0)
+		panic("cannot allocate page: %e", r);
+	if ((r = page_insert(e->env_pgdir, pp, (void *) SYSCPAGE, PTE_U)) < 0)
+		panic("cannot insert page: %e", r);
+	memmove((void *) __sys_return, (void *) SYSCPAGE,
+		__sys_return_end - __sys_return);
 
 	// set up eip as the program's entry point
 	e->env_tf.tf_eip = elf->e_entry;
