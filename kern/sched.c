@@ -26,7 +26,6 @@ sched_yield(void)
 		idx = ENVX(last_run + i + 1);
 		if (idx > 0 && envs[idx].env_status == ENV_RUNNABLE) {
 			last_run = idx;
-			cprintf("[sched] run %d at %08x\n", idx, envs[idx].env_tf.tf_eip);
 			env_run(&envs[idx]);
 			return;
 		}
