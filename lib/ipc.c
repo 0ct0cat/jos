@@ -29,7 +29,10 @@ ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 		r = sys_ipc_recv(pg);
 
 	if (r < 0) {
-		*from_env_store = *perm_store = 0;
+		if (from_env_store != NULL)
+			*from_env_store = 0;
+		if (perm_store != NULL)
+			*perm_store = 0;
 		return 0;
 	}
 	if (from_env_store != NULL)
@@ -60,5 +63,5 @@ ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
 	} while (r == -E_IPC_NOT_RECV);
 
 	if (r < 0)
-		panic("IPC send error: %e", r);
+		panic("IPC send error: %e, env: %d", r, to_env);
 }
