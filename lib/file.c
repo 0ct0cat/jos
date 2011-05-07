@@ -93,8 +93,16 @@ devfile_read(struct Fd *fd, void *buf, size_t n)
 	// filling fsipcbuf.read with the request arguments.  The
 	// bytes read will be written back to fsipcbuf by the file
 	// system server.
-	// LAB 5: Your code here
-	panic("devfile_read not implemented");
+
+	ssize_t size;
+
+	fsipcbuf.read.req_fileid = fd->fd_file.id;
+	fsipcbuf.read.req_n = n;
+	if ((size = fsipc(FSREQ_READ, &(fsipcbuf.readRet.ret_buf))) < 0)
+		return size;
+
+	memmove(buf, fsipcbuf.readRet.ret_buf, size);
+	return size;
 }
 
 // Write at most 'n' bytes from 'buf' to 'fd' at the current seek position.
