@@ -351,7 +351,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 		if ((perm & PTE_W)
 			&& !(*(pgdir_walk(curenv->env_pgdir, srcva, 0)) & PTE_W))
 			return -E_INVAL;
-		if ((r = page_insert(curenv->env_pgdir, pp, env->env_ipc_dstva, perm)) < 0)
+		if ((r = page_insert(env->env_pgdir, pp, env->env_ipc_dstva, perm)) < 0)
 			return r;
 	}
 	env->env_ipc_value = value;
