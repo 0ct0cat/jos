@@ -344,7 +344,7 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 	if ((uint32_t) srcva < UTOP) {
 		if (srcva != ROUNDUP(srcva, PGSIZE))
 			return -E_INVAL;
-		if (perm & ~PTE_W & ~PTE_U & ~PTE_W & ~PTE_AVAIL)
+		if (perm & ~PTE_USER)
 			return -E_INVAL;
 		if ((pp = page_lookup(curenv->env_pgdir, srcva, NULL)) == NULL)
 			return -E_INVAL;
