@@ -83,21 +83,18 @@ open(const char *path, int mode)
 		return r;
 	}
 
-	// initialize fd
-	fd->fd_dev_id = devfile.dev_id;
-	fd->fd_offset = 0;
-	fd->fd_omode = mode;
-
 	// set up IPC parameters
 	memmove(fsipcbuf.open.req_path, path, size + 1);
 	fsipcbuf.open.req_omode = mode;
 
 	// do IPC
-	if ((r = fsipc(FSREQ_OPEN, NULL)) < 0) {
+	if ((r = fsipc(FSREQ_OPEN, &fsipcbuf)) < 0) {
 		fd_close(fd, 0);
 		return r;
 	}
 
+	// set up fd
+	memmove(fd, (const struct Fd*) &fsipcbuf, sizeof(struct Fd));
 	return fd2num(fd);
 }
 
