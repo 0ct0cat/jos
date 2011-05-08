@@ -62,8 +62,43 @@ open(const char *path, int mode)
 	// If any step after fd_alloc fails, use fd_close to free the
 	// file descriptor.
 
-	// LAB 5: Your code here.
-	panic("open not implemented");
+	struct Fd *fd;
+	int r;
+	unsigned int size;
+
+	// check path length
+	for (size = 0; size < MAXPATHLEN; ++size)
+		if (path[size] == '\0')
+			break;
+	if (size == MAXPATHLEN)
+		return -E_BAD_PATH;
+
+	// allocate an unused struct Fd
+	if ((r = fd_alloc(&fd)) < 0)
+		return r;
+
+	// allocate a page for fd
+	if ((r = sys_page_alloc(env->env_id, fd, PTE_U|PTE_W|PTE_P)) < 0) {
+		fd_close(fd, 0);
+		return r;
+	}
+
+	// initialize fd
+	fd->fd_dev_id = devfile.dev_id;
+	fd->fd_offset = 0;
+	fd->fd_omode = mode;
+
+	// set up IPC parameters
+	memmove(fsipcbuf.open.req_path, path, size + 1);
+	fsipcbuf.open.req_omode = mode;
+
+	// do IPC
+	if ((r = fsipc(FSREQ_OPEN, NULL)) < 0) {
+		fd_close(fd, 0);
+		return r;
+	}
+
+	return fd2num(fd);
 }
 
 // Flush the file descriptor.  After this the fileid is invalid.
