@@ -88,13 +88,11 @@ open(const char *path, int mode)
 	fsipcbuf.open.req_omode = mode;
 
 	// do IPC
-	if ((r = fsipc(FSREQ_OPEN, &fsipcbuf)) < 0) {
+	if ((r = fsipc(FSREQ_OPEN, fd)) < 0) {
 		fd_close(fd, 0);
 		return r;
 	}
 
-	// set up fd
-	memmove(fd, (const struct Fd*) &fsipcbuf, sizeof(struct Fd));
 	return fd2num(fd);
 }
 
