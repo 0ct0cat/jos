@@ -407,6 +407,13 @@ sys_ipc_recv(void *dstva)
 	return 0;
 }
 
+// Return system uptime
+extern unsigned int uptime;
+static int sys_uptime()
+{
+	return uptime;
+}
+
 
 // Dispatches to the correct kernel function, passing the arguments.
 int32_t
@@ -448,6 +455,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 			(unsigned int) a4);
 	case SYS_ipc_recv:
 		return sys_ipc_recv((void *) a1);
+	case SYS_uptime:
+		return sys_uptime();
 	default:
 		return -E_INVAL;
 	}

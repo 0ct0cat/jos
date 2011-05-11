@@ -23,6 +23,7 @@ struct Pseudodesc idt_pd = {
 	sizeof(idt) - 1, (uint32_t) idt
 };
 
+unsigned int uptime = 0;
 
 static const char *trapname(int trapno)
 {
@@ -148,6 +149,7 @@ trap_dispatch(struct Trapframe *tf)
 		return;
 	case IRQ_OFFSET + IRQ_TIMER:
 		// Handle clock interrupts
+		uptime += 10;
 		sched_yield();
 		return;
 	case T_SYSCALL:

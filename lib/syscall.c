@@ -117,3 +117,8 @@ sys_ipc_recv(void *dstva)
 	return syscall(SYS_ipc_recv, 1, (uint32_t)dstva, 0, 0, 0, 0);
 }
 
+unsigned int
+sys_uptime()
+{
+	return syscall(SYS_uptime, 0, 0, 0, 0, 0, 0);
+}
