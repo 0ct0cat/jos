@@ -160,7 +160,7 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
 		memset(diskaddr(ind), BLKSIZE, 0);
 		f->f_indirect = ind;
 	}
-	*ppdiskbno = &((uint32_t *) (f->f_indirect))[filebno - NDIRECT];
+	*ppdiskbno = &((uint32_t *) diskaddr(f->f_indirect))[filebno];
 	return 0;
 }
 
