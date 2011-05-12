@@ -18,11 +18,24 @@ sched_yield(void)
 	// But never choose envs[0], the idle environment,
 	// unless NOTHING else is runnable.
 
-	// LAB 4: Your code here.
+	static unsigned int last_run = 0;
+	unsigned int i, idx;
+
+	// start from next one
+	for (i = 0; i < NENV; ++i) {
+		idx = ENVX(last_run + i + 1);
+		if (idx > 0 && envs[idx].env_status == ENV_RUNNABLE) {
+			last_run = idx;
+			env_run(&envs[idx]);
+			return;
+		}
+	}
 
 	// Run the special idle environment when nothing else is runnable.
-	if (envs[0].env_status == ENV_RUNNABLE)
+	if (envs[0].env_status == ENV_RUNNABLE) {
+		last_run = 0;
 		env_run(&envs[0]);
+	}
 	else {
 		cprintf("Destroyed all environments - nothing more to do!\n");
 		while (1)

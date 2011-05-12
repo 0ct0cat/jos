@@ -1,6 +1,7 @@
 #include <inc/mmu.h>
 #include <inc/x86.h>
 #include <inc/assert.h>
+#include <inc/string.h>
 
 #include <kern/pmap.h>
 #include <kern/trap.h>
@@ -23,6 +24,7 @@ struct Pseudodesc idt_pd = {
 	sizeof(idt) - 1, (uint32_t) idt
 };
 
+unsigned int uptime = 0;
 
 static const char *trapname(int trapno)
 {
@@ -58,13 +60,34 @@ static const char *trapname(int trapno)
 	return "(unknown trap)";
 }
 
+void HANDLER_SYSCALL();
+extern uint32_t trap_handlers[];
+extern uint32_t irq_handlers[];
 
 void
 idt_init(void)
 {
 	extern struct Segdesc gdt[];
-	
-	// LAB 3: Your code here.
+	int i;
+
+	// exceptions
+	for (i = T_DIVIDE; i < T_SIMDERR; ++i) {
+		// T_BRKPT can be invoked from user space
+		if (i == T_BRKPT) {
+			SETGATE(idt[i], 0, GD_KT, trap_handlers[i], 3);
+		}
+		else {
+			SETGATE(idt[i], 0, GD_KT, trap_handlers[i], 0);
+		}
+	}
+
+	// system call
+	SETGATE(idt[T_SYSCALL], 0, GD_KT, HANDLER_SYSCALL, 3);
+
+	// hardware interrupt
+	for (i = IRQ_0; i <= IRQ_15; ++i) {
+		SETGATE(idt[IRQ_OFFSET + i], 0, GD_KT, irq_handlers[i], 3);
+	}
 
 	// Setup a TSS so that we get the right stack
 	// when we trap to the kernel.
@@ -115,32 +138,37 @@ print_regs(struct PushRegs *regs)
 static void
 trap_dispatch(struct Trapframe *tf)
 {
-	// Handle processor exceptions.
-	// LAB 3: Your code here.
-	
-	// Handle clock interrupts.
-	// LAB 4: Your code here.
-
-	// Add time tick increment to clock interrupts.
-	// LAB 6: Your code here.
-
-	// Handle spurious interrupts
-	// The hardware sometimes raises these because of noise on the
-	// IRQ line or other reasons. We don't care.
-	if (tf->tf_trapno == IRQ_OFFSET + IRQ_SPURIOUS) {
+	switch (tf->tf_trapno) {
+	case IRQ_OFFSET + IRQ_SPURIOUS:
+		// Handle spurious interrupts
+		// The hardware sometimes raises these because of noise on the
+		// IRQ line or other reasons. We don't care.
 		cprintf("Spurious interrupt on irq 7\n");
 		print_trapframe(tf);
 		return;
-	}
-
-
-	// Unexpected trap: The user process or the kernel has a bug.
-	print_trapframe(tf);
-	if (tf->tf_cs == GD_KT)
-		panic("unhandled trap in kernel");
-	else {
-		env_destroy(curenv);
+	case IRQ_OFFSET + IRQ_TIMER:
+		// Handle clock interrupts
+		uptime += 10;
+		sched_yield();
 		return;
+	case T_SYSCALL:
+		system_call_handler(tf);
+		return;
+	case T_PGFLT:
+		page_fault_handler(tf);
+		return;
+	case T_BRKPT:
+		monitor(tf);
+		return;
+	default:
+		// Unexpected trap: The user process or the kernel has a bug.
+		print_trapframe(tf);
+		if (tf->tf_cs == GD_KT)
+			panic("unhandled trap in kernel");
+		else {
+			env_destroy(curenv);
+			return;
+		}
 	}
 }
 
@@ -184,13 +212,18 @@ void
 page_fault_handler(struct Trapframe *tf)
 {
 	uint32_t fault_va;
+	struct UTrapframe utf;
+	void *dst;
+	size_t size;
 
 	// Read processor's CR2 register to find the faulting address
 	fault_va = rcr2();
 
 	// Handle kernel-mode page faults.
-	
-	// LAB 3: Your code here.
+	if ((tf->tf_cs & 3) == 0) {
+		panic("kernel page fault at virtual address %p", fault_va);
+		return;
+	}
 
 	// We've already handled kernel-mode exceptions, so if we get here,
 	// the page fault happened in user mode.
@@ -223,7 +256,41 @@ page_fault_handler(struct Trapframe *tf)
 	//   To change what the user environment runs, modify 'curenv->env_tf'
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
-	// LAB 4: Your code here.
+	if (curenv->env_pgfault_upcall != NULL
+		&& (tf->tf_esp < UXSTACKTOP-PGSIZE
+			|| tf->tf_esp >= UXSTACKTOP
+			|| tf->tf_esp - sizeof(struct UTrapframe) - 4 >= UXSTACKTOP-PGSIZE)) {
+		// decide the destination of UTrapframe
+		if (tf->tf_esp >= UXSTACKTOP-PGSIZE && tf->tf_esp < UXSTACKTOP) {
+			size = 4 + sizeof(utf);
+			dst = (void *) (tf->tf_esp - size);
+		}
+		else {
+			size = sizeof(utf);
+			dst = (void *) (UXSTACKTOP - size);
+		}
+
+		// make sure exception stack is allocated and pgfault_upcall is valid
+		user_mem_assert(curenv, (void *) dst, size, PTE_P|PTE_U|PTE_W);
+		user_mem_assert(curenv, curenv->env_pgfault_upcall, sizeof(void *),
+			PTE_P|PTE_U);
+
+		// set up UTrapframe
+		utf = (struct UTrapframe) {
+			fault_va,
+			tf->tf_err,
+			tf->tf_regs,
+			tf->tf_eip,
+			tf->tf_eflags,
+			curenv->env_tf.tf_esp
+		};
+		memmove(dst, &utf, sizeof(utf));
+
+		curenv->env_tf.tf_esp = (uint32_t) dst;
+		curenv->env_tf.tf_eip = (uint32_t) curenv->env_pgfault_upcall;
+		env_run(curenv);
+		return;
+	}
 
 	// Destroy the environment that caused the fault.
 	cprintf("[%08x] user fault va %08x ip %08x\n",
@@ -232,3 +299,15 @@ page_fault_handler(struct Trapframe *tf)
 	env_destroy(curenv);
 }
 
+void
+system_call_handler(struct Trapframe *tf)
+{
+	struct PushRegs *regs = &(tf->tf_regs);
+	uint32_t ret;
+	// %eax - system call number
+	// %edx to %esi - arguments for system call
+	// return value stored in %eax
+	ret = syscall(regs->reg_eax, regs->reg_edx, regs->reg_ecx,
+		regs->reg_ebx, regs->reg_edi, regs->reg_esi);
+	regs->reg_eax = ret;
+}

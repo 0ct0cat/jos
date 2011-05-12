@@ -118,6 +118,12 @@ sys_ipc_recv(void *dstva)
 }
 
 unsigned int
+sys_uptime()
+{
+        return syscall(SYS_uptime, 0, 0, 0, 0, 0, 0);
+}
+
+unsigned int
 sys_time_msec(void)
 {
 	return (unsigned int) syscall(SYS_time_msec, 0, 0, 0, 0, 0, 0);
