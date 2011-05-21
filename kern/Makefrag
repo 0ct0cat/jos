@@ -49,7 +49,6 @@ KERN_BINFILES :=	user/idle \
 			user/echosrv \
 			user/echotest \
 			user/hello \
-			user/tick \
 			fs/fs \
 			net/testoutput \
 			net/testinput \
