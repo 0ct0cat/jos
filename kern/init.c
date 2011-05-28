@@ -14,7 +14,7 @@
 #include <kern/picirq.h>
 #include <kern/time.h>
 #include <kern/pci.h>
-
+#include <kern/e100.h>
 
 void
 i386_init(void)

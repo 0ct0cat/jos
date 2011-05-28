@@ -122,3 +122,9 @@ sys_time_msec(void)
 {
 	return (unsigned int) syscall(SYS_time_msec, 0, 0, 0, 0, 0, 0);
 }
+
+int
+sys_transmit(void *buffer, size_t len)
+{
+	return syscall(SYS_transmit, (uint32_t) buffer, (uint32_t) len, 0, 0, 0, 0);
+}
