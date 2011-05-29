@@ -17,11 +17,6 @@ output(envid_t ns_envid)
 		ipc_recv(&envid, &nsipcbuf, 0);
 		if (envid != ns_envid)
 			continue;
-		unsigned int i;
-		cprintf("Data (%d): ", nsipcbuf.pkt.jp_len);
-		for (i = 0; i < nsipcbuf.pkt.jp_len; ++i)
-			cprintf("%x ", nsipcbuf.pkt.jp_data[i]);
-		cprintf("\n");
 		sys_transmit(nsipcbuf.pkt.jp_data, nsipcbuf.pkt.jp_len);
 	}
 }
