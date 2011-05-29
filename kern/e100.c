@@ -23,8 +23,11 @@ int e100_attach(struct pci_func *f) {
 	return 0;
 }
 
+// begin of proceeding queue
 static unsigned int e100_tcb_qbegin = 0;
+// end of proceeding queue
 static unsigned int e100_tcb_qend = 0;
+// end of new queue (begin is qend above)
 static unsigned int e100_tcb_nend = 0;
 
 void e100_tcb_init() {
