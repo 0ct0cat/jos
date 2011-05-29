@@ -5,6 +5,7 @@
 #include <kern/e100.h>
 #include <kern/console.h>
 #include <kern/pmap.h>
+#include <kern/trap.h>
 
 static uint8_t e100_irq;
 static uint32_t e100_base;
@@ -63,16 +64,6 @@ int e100_cu_start()
 	// start CU
 	outw(e100_base + 2, E100_CU_START);
 	return 0;
-}
-
-int e100_cu_poll() {
-	if (e100_tcb_qbegin != e100_tcb_qend) {
-		if (e100_tcb_ring[e100_tcb_qbegin].tcb_hdr.cb_status & E100_STATUS_OK) {
-			e100_tcb_qbegin = E100_RING_NEXT(e100_tcb_qbegin);
-			return 0;
-		}
-	}
-	return 1;
 }
 
 int e100_transmit(void *buffer, size_t len) {
