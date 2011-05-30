@@ -416,11 +416,18 @@ sys_time_msec(void)
 	return time_msec();
 }
 
-// Transmit a package via e100
+// Transmit a packet via e100
 static int
 sys_transmit(void *buffer, size_t len)
 {
 	return e100_transmit(buffer, len);
+}
+
+// Receive a packet via e100
+static int
+sys_receive(void *buffer)
+{
+	return e100_receive(buffer);
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
@@ -467,6 +474,8 @@ syscall(uint32_t syscallno, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t a4, 
 		return sys_time_msec();
 	case SYS_transmit:
 		return sys_transmit((void *) a1, (size_t) a2);
+	case SYS_receive:
+		return sys_receive((void *) a1);
 	default:
 		return -E_INVAL;
 	}

@@ -128,3 +128,9 @@ sys_transmit(void *buffer, size_t len)
 {
 	return syscall(SYS_transmit, 0, (uint32_t) buffer, (uint32_t) len, 0, 0, 0);
 }
+
+int
+sys_receive(void *buffer)
+{
+	return syscall(SYS_receive, 0, (uint32_t) buffer, 0, 0, 0, 0);
+}

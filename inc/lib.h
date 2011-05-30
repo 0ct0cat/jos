@@ -57,6 +57,7 @@ int	sys_ipc_recv(void *rcv_pg);
 unsigned int sys_uptime();
 unsigned int sys_time_msec(void);
 int sys_transmit(void *buffer, size_t len);
+int sys_receive(void *buffer);
 
 // This must be inlined.  Exercise for reader: why?
 static __inline envid_t sys_exofork(void) __attribute__((always_inline));
