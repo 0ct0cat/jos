@@ -15,6 +15,7 @@ extern struct Gatedesc idt[];
 void idt_init(void);
 void print_regs(struct PushRegs *regs);
 void print_trapframe(struct Trapframe *tf);
+void set_e100_irqno(uint8_t irqno);
 void page_fault_handler(struct Trapframe *);
 void system_call_handler(struct Trapframe *);
 void backtrace(struct Trapframe *);

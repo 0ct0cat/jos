@@ -13,6 +13,7 @@
 #include <kern/kclock.h>
 #include <kern/picirq.h>
 #include <kern/time.h>
+#include <kern/e100.h>
 
 static struct Taskstate ts;
 
@@ -133,9 +134,23 @@ print_regs(struct PushRegs *regs)
 	cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+static uint8_t e100_irqno = 0;
+
+void
+set_e100_irqno(uint8_t irqno)
+{
+	e100_irqno = irqno;
+}
+
 static void
 trap_dispatch(struct Trapframe *tf)
 {
+	// deal with e100 interrupts
+	if (e100_irqno != 0 && tf->tf_trapno == IRQ_OFFSET + e100_irqno) {
+		e100_trap_handler();
+		return;
+	}
+
 	switch (tf->tf_trapno) {
 	case IRQ_OFFSET + IRQ_SPURIOUS:
 		// Handle spurious interrupts
