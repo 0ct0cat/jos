@@ -4,9 +4,10 @@
 #include <inc/types.h>
 
 #include <kern/pci.h>
+#include <kern/env.h>
 
 // length of DMA rings
-#define E100_RING_N 16
+#define E100_RING_N 128
 #define E100_RING_NEXT(i) (((i) + 1) % E100_RING_N)
 
 // max size of an Ethernet packet in bytes
@@ -16,7 +17,10 @@
 #define E100_CU_START (1 << 4)
 #define E100_RU_START 1
 
+// IRQ bits that are not masked
 #define E100_IRQ_FR (1 << 6)
+#define E100_IRQ_SI (1 << 1)
+#define E100_IRQ_M 1
 
 #define E100_STATUS_CU_MASK (3 << 6)
 #define E100_STATUS_CU_IDLE 0
@@ -27,6 +31,8 @@
 #define E100_RFD_COUNT_MASK 0x3fff
 
 #define E100_STATUS_OK (1 << 13)
+
+#define QUEUE_MAX 32
 
 struct e100_cb_hdr {
 	volatile uint16_t cb_status;

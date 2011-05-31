@@ -8,6 +8,7 @@
 #include <kern/pmap.h>
 #include <kern/trap.h>
 #include <kern/picirq.h>
+#include <kern/sched.h>
 
 static uint8_t e100_irq;
 static uint32_t e100_base;
@@ -26,8 +27,8 @@ int e100_attach(struct pci_func *f) {
 	// reset e100
 	outl(e100_base + 1, 0x0);
 
-	// mask all interrupts except FR
-	outb(e100_base + 3, ~((uint8_t) E100_IRQ_FR));
+	// mask all interrupts except FR, also not marking SI and M bits
+	outb(e100_base + 3, ~((uint8_t) E100_IRQ_FR | E100_IRQ_SI | E100_IRQ_M));
 
 	e100_ring_init();
 	e100_ru_start();
@@ -137,6 +138,10 @@ int e100_transmit(void *buffer, size_t len) {
 	return 0;
 }
 
+static envid_t recv_q[QUEUE_MAX];
+static unsigned int queue_front = 0;
+static unsigned int queue_back = 0;
+
 int e100_receive(void *dst)
 {
 	struct e100_rfd *curitem;
@@ -144,25 +149,41 @@ int e100_receive(void *dst)
 
 	curitem = &e100_rfd_ring[e100_rfd_idx];
 	if (curitem->rfd_hdr.cb_status & E100_STATUS_OK) {
-		e100_rfd_idx = E100_RING_NEXT(e100_rfd_idx);
+		cprintf("[%04x] Fetching from slot #%d...\n", curenv->env_id, e100_rfd_idx);
 
 		len = curitem->rfd_count & E100_RFD_COUNT_MASK;
-		if (len > 0) {
-			user_mem_assert(curenv, dst, len, PTE_U|PTE_W);
-			memmove(dst, curitem->rfd_data, len);
-		}
+		user_mem_assert(curenv, dst, len, PTE_U|PTE_W);
+		memmove(dst, curitem->rfd_data, len);
 		curitem->rfd_hdr.cb_status = 0;
+		e100_rfd_idx = E100_RING_NEXT(e100_rfd_idx);
 		return len;
 	}
 	else {
+		if ((queue_back + 1) % QUEUE_MAX != queue_front) {
+			recv_q[queue_back] = curenv->env_id;
+			queue_back = (queue_back + 1) % QUEUE_MAX;
+			// block the environment
+			curenv->env_status = ENV_NOT_RUNNABLE;
+			curenv->env_tf.tf_regs.reg_eax = -1;
+			sched_yield();
+		}
 		return -1;
 	}
 	return 0;
 }
 
+// FR interrupt - new packet has arrived
 void e100_trap_handler()
 {
-	cprintf("Interrupt: %d\n", inb(e100_base + 1));
+	cprintf("Interrupt %d!\n", inb(e100_base + 1));
+
+	cprintf("front %d, back %d\n", queue_front, queue_back);
+	// take an environment from queue
+	if (queue_front != queue_back) {
+		envs[ENVX(recv_q[queue_front])].env_status = ENV_RUNNABLE;
+		queue_front = (queue_front + 1) % QUEUE_MAX;
+	}
+
 	// acknowledge FR interrupt and clear it
 	outb(e100_base + 1, (uint8_t) ~0);
 	irq_eoi();
