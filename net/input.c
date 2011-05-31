@@ -15,24 +15,14 @@ input(envid_t ns_envid)
 	// reading from it for a while, so don't immediately receive
 	// another packet in to the same physical page.
 
-	uint8_t *buffer0, *buffer1, *current;
-	unsigned int count = 0;
 	int len;
 
-	buffer0 = (uint8_t *) malloc(PGSIZE);
-	buffer1 = (uint8_t *) malloc(PGSIZE);
-	current = (uint8_t *) malloc(PGSIZE);
-
 	while (1) {
-		//current = (++count % 2) ? buffer0 : buffer1;
-		len = sys_receive(current);
+		sys_page_alloc(0, &nsipcbuf, PTE_P|PTE_U|PTE_W);
+		len = sys_receive(&nsipcbuf.pkt.jp_data);
 		if (len >= 0) {
 			nsipcbuf.pkt.jp_len = len;
-			memmove(nsipcbuf.pkt.jp_data, current, len);
 			ipc_send(ns_envid, NSREQ_INPUT, &nsipcbuf, PTE_P|PTE_U);
 		}
 	}
-
-	free(buffer0);
-	free(buffer1);
 }
