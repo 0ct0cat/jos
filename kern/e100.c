@@ -25,7 +25,7 @@ int e100_attach(struct pci_func *f) {
 	irq_setmask_8259A(irq_mask_8259A & ~(1 << e100_irq));
 
 	// reset e100
-	outl(e100_base + 1, 0x0);
+	outl(e100_base + 8, 0x00000000);
 
 	// mask all interrupts except FR, also not marking SI and M bits
 	outb(e100_base + 3, ~((uint8_t) E100_IRQ_FR | E100_IRQ_SI | E100_IRQ_M));
