@@ -13,7 +13,9 @@
 static uint8_t e100_irq;
 static uint32_t e100_base;
 
-int e100_attach(struct pci_func *f) {
+// Initialize E100 as a PCI device
+int
+e100_attach(struct pci_func *f) {
 	pci_func_enable(f);
 
 	e100_irq = f->irq_line;
@@ -51,7 +53,9 @@ static unsigned int e100_tcb_nend = 0;
 // current rfd index
 static unsigned int e100_rfd_idx = 0;
 
-void e100_ring_init() {
+// Initialize E100 DMA rings for receive and transmit
+void
+e100_ring_init() {
 	unsigned int i, j;
 
 	// initialize tcb
@@ -87,27 +91,35 @@ void e100_ring_init() {
 	}
 };
 
-bool e100_cu_is_idle() {
+// Returns whether the E100 commit unit (CU) is idle
+bool
+e100_cu_is_idle() {
 	uint16_t status;
 	status = inw(e100_base);
 	return (status & E100_STATUS_CU_MASK) == E100_STATUS_CU_IDLE;
 }
 
-int e100_cu_start()
+// Starts the E100 commit unit
+int
+e100_cu_start()
 {
 	outl(e100_base + 4, (uint32_t) PADDR(&e100_tcb_ring[e100_tcb_qbegin]));
 	outb(e100_base + 2, E100_CU_START);
 	return 0;
 }
 
-int e100_ru_start()
+// Starts the E100 receive unit
+int
+e100_ru_start()
 {
 	outl(e100_base + 4, (uint32_t) PADDR(&e100_rfd_ring[0]));
 	outb(e100_base + 2, E100_RU_START);
 	return 0;
 }
 
-int e100_transmit(void *buffer, size_t len) {
+// Transmit a buffer with len via e100
+int
+e100_transmit(void *buffer, size_t len) {
 	if (len > E100_ETH_MAX_BYTE)
 		return -1;
 
@@ -142,15 +154,15 @@ static envid_t recv_q[QUEUE_MAX];
 static unsigned int queue_front = 0;
 static unsigned int queue_back = 0;
 
-int e100_receive(void *dst)
+// Receive a packet to dst, returning the length
+int
+e100_receive(void *dst)
 {
 	struct e100_rfd *curitem;
 	size_t len;
 
 	curitem = &e100_rfd_ring[e100_rfd_idx];
 	if (curitem->rfd_hdr.cb_status & E100_STATUS_OK) {
-		cprintf("[%04x] Fetching from slot #%d...\n", curenv->env_id, e100_rfd_idx);
-
 		len = curitem->rfd_count & E100_RFD_COUNT_MASK;
 		user_mem_assert(curenv, dst, len, PTE_U|PTE_W);
 		memmove(dst, curitem->rfd_data, len);
@@ -173,11 +185,9 @@ int e100_receive(void *dst)
 }
 
 // FR interrupt - new packet has arrived
-void e100_trap_handler()
+void
+e100_trap_handler()
 {
-	cprintf("Interrupt %d!\n", inb(e100_base + 1));
-
-	cprintf("front %d, back %d\n", queue_front, queue_back);
 	// take an environment from queue
 	if (queue_front != queue_back) {
 		envs[ENVX(recv_q[queue_front])].env_status = ENV_RUNNABLE;
